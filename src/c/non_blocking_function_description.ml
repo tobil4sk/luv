@@ -3,444 +3,15 @@
 
 
 
-(* Everything is in one file to cut down on Dune boilerplate, as it would grow
-   proportionally in the number of files the bindings are spread over.
-   https://github.com/ocaml/dune/issues/135. *)
+module Types = Types_generated
 
-module Types = Luv_c_types
+module Functions(F : Ctypes.FOREIGN) = struct
+  (* We want to be able to call some of the libuv functions with the OCaml
+     runtime lock released, in some circumstances. For that, we have Ctypes
+     generate separate stubs that release the lock.
 
-(* We want to be able to call some of the libuv functions with the OCaml runtime
-   lock released, in some circumstances. For that, we have Ctypes generate
-   separate stubs that release the lock.
+     The functions in this file are called with the runtime lock HELD. *)
 
-   However, releasing the lock is not possible for some kinds of arguments. So,
-   we can't blindly generate lock-releasing and lock-retaining versions of each
-   binding.
-
-   Instead, we group the lock-releasing bindings in this module [Blocking]. *)
-module Blocking (F : Ctypes.FOREIGN) =
-struct
-  open Ctypes
-  open F
-
-  let error_code = int
-
-  module Loop =
-  struct
-    let run =
-      foreign "uv_run"
-        (ptr Types.Loop.t @-> Types.Loop.Run_mode.t @-> returning bool)
-  end
-
-  (* bind is potentially a blocking call, because the filesystem may block the
-     calling process indefinitely when creating a file for Unix domain socket or
-     similar. *)
-  module Pipe =
-  struct
-    let bind =
-      foreign "uv_pipe_bind"
-        (ptr Types.Pipe.t @-> string @-> returning error_code)
-
-    let bind2 =
-      foreign "uv_pipe_bind2"
-        (ptr Types.Pipe.t @-> string @-> size_t @-> int @->
-          returning error_code)
-  end
-
-  (* Synchronous (callback = NULL) calls to these functions are blocking, so we
-     have to release the OCaml runtime lock. Technically, asychronous calls are
-     non-blocking, and we don't have to release the lock. However, supporting
-     both variants would take a bit of extra code to implement, so it's best to
-     see if there is a need. For now, we release the runtime lock during the
-     asychronous calls as well. *)
-  module File =
-  struct
-    let t = int
-    let uid = int
-    let gid = int
-    let request = Types.File.Request.t
-
-    type trampoline = (Types.File.Request.t ptr -> unit) static_funptr
-
-    let trampoline : trampoline typ =
-      static_funptr
-        Ctypes.(ptr request @-> returning void)
-
-    let get_trampoline =
-      foreign "luv_get_fs_trampoline"
-        (void @-> returning trampoline)
-
-    let get_null_callback =
-      foreign "luv_null_fs_callback_pointer"
-        (void @-> returning trampoline)
-
-    let req_cleanup =
-      foreign "uv_fs_req_cleanup"
-        (ptr request @-> returning void)
-
-    let close =
-      foreign "uv_fs_close"
-        (ptr Types.Loop.t @-> ptr request @-> t @-> trampoline @->
-          returning error_code)
-
-    let open_ =
-      foreign "uv_fs_open"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         int @->
-         int @->
-         trampoline @->
-          returning error_code)
-
-    let read =
-      foreign "uv_fs_read"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         t @->
-         ptr Types.Buf.t @->
-         uint @->
-         int64_t @->
-         trampoline @->
-          returning error_code)
-
-    let write =
-      foreign "uv_fs_write"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         t @->
-         ptr Types.Buf.t @->
-         uint @->
-         int64_t @->
-         trampoline @->
-           returning error_code)
-
-    let unlink =
-      foreign "uv_fs_unlink"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let mkdir =
-      foreign "uv_fs_mkdir"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> int @-> trampoline @->
-          returning error_code)
-
-    let mkdtemp =
-      foreign "uv_fs_mkdtemp"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let mkstemp =
-      foreign "uv_fs_mkstemp"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let rmdir =
-      foreign "uv_fs_rmdir"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let opendir =
-      foreign "uv_fs_opendir"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let closedir =
-      foreign "uv_fs_closedir"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         ptr Types.File.Dir.t @->
-         trampoline @->
-          returning error_code)
-
-    let readdir =
-      foreign "uv_fs_readdir"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         ptr Types.File.Dir.t @->
-         trampoline @->
-          returning error_code)
-
-    let scandir =
-      foreign "uv_fs_scandir"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> int @-> trampoline @->
-          returning error_code)
-
-    let scandir_next =
-      foreign "uv_fs_scandir_next"
-        (ptr request @-> ptr Types.File.Dirent.t @-> returning error_code)
-
-    let stat =
-      foreign "uv_fs_stat"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let lstat =
-      foreign "uv_fs_lstat"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let fstat =
-      foreign "uv_fs_fstat"
-        (ptr Types.Loop.t @-> ptr request @-> t @-> trampoline @->
-          returning error_code)
-
-    let statfs =
-      foreign "uv_fs_statfs"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let rename =
-      foreign "uv_fs_rename"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         string @->
-         trampoline @->
-          returning error_code)
-
-    let fsync =
-      foreign "uv_fs_fsync"
-        (ptr Types.Loop.t @-> ptr request @-> t @-> trampoline @->
-          returning error_code)
-
-    let fdatasync =
-      foreign "uv_fs_fdatasync"
-        (ptr Types.Loop.t @-> ptr request @-> t @-> trampoline @->
-          returning error_code)
-
-    let ftruncate =
-      foreign "uv_fs_ftruncate"
-        (ptr Types.Loop.t @-> ptr request @-> t @-> int64_t @-> trampoline @->
-          returning error_code)
-
-    let copyfile =
-      foreign "uv_fs_copyfile"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         string @->
-         int @->
-         trampoline @->
-          returning error_code)
-
-    let sendfile =
-      foreign "uv_fs_sendfile"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         t @->
-         t @->
-         int64_t @->
-         size_t @->
-         trampoline @->
-          returning error_code)
-
-    let access =
-      foreign "uv_fs_access"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> int @-> trampoline @->
-          returning error_code)
-
-    let chmod =
-      foreign "uv_fs_chmod"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> int @-> trampoline @->
-          returning error_code)
-
-    let fchmod =
-      foreign "uv_fs_fchmod"
-        (ptr Types.Loop.t @-> ptr request @-> t @-> int @-> trampoline @->
-          returning error_code)
-
-    let utime =
-      foreign "uv_fs_utime"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         float @->
-         float @->
-         trampoline @->
-          returning error_code)
-
-    let futime =
-      foreign "uv_fs_futime"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         t @->
-         float @->
-         float @->
-         trampoline @->
-          returning error_code)
-
-    let lutime =
-      foreign "uv_fs_lutime"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         float @->
-         float @->
-         trampoline @->
-          returning error_code)
-
-    let link =
-      foreign "uv_fs_link"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         string @->
-         trampoline @->
-          returning error_code)
-
-    let symlink =
-      foreign "uv_fs_symlink"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         string @->
-         int @->
-         trampoline @->
-          returning error_code)
-
-    let readlink =
-      foreign "uv_fs_readlink"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let realpath =
-      foreign "uv_fs_realpath"
-        (ptr Types.Loop.t @-> ptr request @-> string @-> trampoline @->
-          returning error_code)
-
-    let chown =
-      foreign "uv_fs_chown"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         uid @->
-         gid @->
-         trampoline @->
-          returning error_code)
-
-    let fchown =
-      foreign "uv_fs_fchown"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         t @->
-         uid @->
-         gid @->
-         trampoline @->
-          returning error_code)
-
-    let lchown =
-      foreign "uv_fs_lchown"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         string @->
-         uid @->
-         gid @->
-         trampoline @->
-          returning error_code)
-
-    let get_result =
-      foreign "uv_fs_get_result"
-        (ptr request @-> returning PosixTypes.ssize_t)
-
-    let get_ptr =
-      foreign "uv_fs_get_ptr"
-        (ptr request @-> returning (ptr void))
-
-    let get_ptr_as_string =
-      foreign "uv_fs_get_ptr"
-        (ptr request @-> returning string)
-
-    let get_path =
-      foreign "luv_fs_get_path"
-        (ptr request @-> returning string)
-
-    let get_statbuf =
-      foreign "uv_fs_get_statbuf"
-        (ptr request @-> returning (ptr Types.File.Stat.t))
-  end
-
-  module Thread =
-  struct
-    let join =
-      foreign "uv_thread_join"
-        (ptr Types.Thread.t @-> returning error_code)
-  end
-
-  module Mutex =
-  struct
-    let lock =
-      foreign "uv_mutex_lock"
-        (ptr Types.Mutex.t @-> returning void)
-  end
-
-  module Rwlock =
-  struct
-    let rdlock =
-      foreign "uv_rwlock_rdlock"
-        (ptr Types.Rwlock.t @-> returning void)
-
-    let wrlock =
-      foreign "uv_rwlock_wrlock"
-        (ptr Types.Rwlock.t @-> returning void)
-  end
-
-  module Semaphore =
-  struct
-    let wait =
-      foreign "uv_sem_wait"
-        (ptr Types.Semaphore.t @-> returning void)
-  end
-
-  module Condition =
-  struct
-    let wait =
-      foreign "uv_cond_wait"
-        (ptr Types.Condition.t @-> ptr Types.Mutex.t @-> returning void)
-
-    let timedwait =
-      foreign "uv_cond_timedwait"
-        (ptr Types.Condition.t @-> ptr Types.Mutex.t @-> uint64_t @->
-          returning error_code)
-  end
-
-  module Barrier =
-  struct
-    let wait =
-      foreign "uv_barrier_wait"
-        (ptr Types.Barrier.t @-> returning bool)
-  end
-
-  module Time =
-  struct
-    let sleep =
-      foreign "uv_sleep"
-        (int @-> returning void)
-  end
-
-  module Random =
-  struct
-    let request = Types.Random.Request.t
-
-    let trampoline =
-      static_funptr
-        Ctypes.(ptr request @-> error_code @-> ptr void @-> size_t @->
-          returning void)
-
-    let random =
-      foreign "uv_random"
-        (ptr Types.Loop.t @->
-         ptr request @->
-         ptr char @->
-         size_t @->
-         uint @->
-         trampoline @->
-          returning error_code)
-  end
-end
-
-module Descriptions (F : Ctypes.FOREIGN) =
-struct
   open Ctypes
   open F
 
@@ -634,7 +205,7 @@ struct
     let start =
       foreign "uv_timer_start"
         (ptr t @-> trampoline @-> uint64_t @-> uint64_t @->
-          returning error_code)
+         returning error_code)
 
     let stop =
       foreign "uv_timer_stop"
@@ -818,7 +389,7 @@ struct
       let trampoline =
         static_funptr
           Ctypes.(ptr Types.Stream.Connect_request.t @-> error_code @->
-            returning void)
+                  returning void)
 
       let get_trampoline =
         foreign "luv_get_connect_trampoline"
@@ -830,7 +401,7 @@ struct
       let trampoline =
         static_funptr
           Ctypes.(ptr Types.Stream.Shutdown_request.t @-> error_code @->
-            returning void)
+                  returning void)
 
       let get_trampoline =
         foreign "luv_get_shutdown_trampoline"
@@ -842,7 +413,7 @@ struct
       let trampoline =
         static_funptr
           Ctypes.(ptr Types.Stream.Write_request.t @-> error_code @->
-            returning void)
+                  returning void)
 
       let get_trampoline =
         foreign "luv_get_write_trampoline"
@@ -858,7 +429,7 @@ struct
     let read_trampoline =
       static_funptr
         Ctypes.(ptr t @-> PosixTypes.ssize_t @-> ptr Types.Buf.t @->
-          returning void)
+                returning void)
 
     let get_connection_trampoline =
       foreign "luv_get_connection_trampoline"
@@ -873,7 +444,7 @@ struct
         (ptr Types.Stream.Shutdown_request.t @->
          ptr t @->
          Shutdown_request.trampoline @->
-          returning error_code)
+         returning error_code)
 
     let listen =
       foreign "uv_listen"
@@ -886,7 +457,7 @@ struct
     let read_start =
       foreign "luv_read_start"
         (ptr t @-> Handle.alloc_trampoline @-> read_trampoline @->
-          returning error_code)
+         returning error_code)
 
     let read_stop =
       foreign "uv_read_stop"
@@ -900,7 +471,7 @@ struct
          uint @->
          ptr t @->
          Write_request.trampoline @->
-          returning error_code)
+         returning error_code)
 
     let try_write =
       foreign "uv_try_write"
@@ -946,7 +517,7 @@ struct
     let socketpair =
       foreign "uv_socketpair"
         (int @-> int @-> ptr Types.Os_socket.t @-> int @-> int @->
-          returning error_code)
+         returning error_code)
 
     let nodelay =
       foreign "uv_tcp_nodelay"
@@ -978,7 +549,7 @@ struct
          ptr t @->
          ptr Types.Sockaddr.t @->
          Stream.Connect_request.trampoline @->
-          returning error_code)
+         returning error_code)
 
     let close_reset =
       foreign "uv_tcp_close_reset"
@@ -1007,7 +578,7 @@ struct
          ptr t @->
          ocaml_string @->
          Stream.Connect_request.trampoline @->
-          returning void)
+         returning void)
 
     let connect2 =
       foreign "uv_pipe_connect2"
@@ -1108,7 +679,7 @@ struct
     let set_membership =
       foreign "uv_udp_set_membership"
         (ptr t @-> ocaml_string @-> ocaml_string @-> Types.UDP.Membership.t @->
-          returning error_code)
+         returning error_code)
 
     let set_source_membership =
       foreign "uv_udp_set_source_membership"
@@ -1117,7 +688,7 @@ struct
          ocaml_string @->
          ocaml_string @->
          Types.UDP.Membership.t @->
-          returning error_code)
+         returning error_code)
 
     let set_multicast_loop =
       foreign "uv_udp_set_multicast_loop"
@@ -1144,7 +715,7 @@ struct
       let trampoline =
         static_funptr
           Ctypes.(ptr Types.UDP.Send_request.t @-> error_code @->
-            returning void)
+                  returning void)
 
       let get_trampoline =
         foreign "luv_get_send_trampoline"
@@ -1159,12 +730,12 @@ struct
          uint @->
          ptr Types.Sockaddr.t @->
          Send_request.trampoline @->
-          returning error_code)
+         returning error_code)
 
     let try_send =
       foreign "uv_udp_try_send"
         (ptr t @-> ptr Types.Buf.t @-> uint @-> ptr Types.Sockaddr.t @->
-          returning error_code)
+         returning error_code)
 
     let recv_trampoline =
       static_funptr
@@ -1174,7 +745,7 @@ struct
           ptr Types.Buf.t @->
           ptr Types.Sockaddr.t @->
           uint @->
-            returning void)
+          returning void)
 
     let get_recv_trampoline =
       foreign "luv_get_recv_trampoline"
@@ -1183,7 +754,7 @@ struct
     let recv_start =
       foreign "luv_udp_recv_start"
         (ptr t @-> Handle.alloc_trampoline @-> recv_trampoline @->
-          returning error_code)
+         returning error_code)
 
     let recv_stop =
       foreign "uv_udp_recv_stop"
@@ -1240,7 +811,7 @@ struct
          ptr Types.Process.Redirection.t @->
          int @->
          int @->
-          returning error_code)
+         returning error_code)
 
     let process_kill =
       foreign "uv_process_kill"
@@ -1291,7 +862,7 @@ struct
           error_code @->
           ptr Types.File.Stat.t @->
           ptr Types.File.Stat.t @->
-            returning void)
+          returning void)
 
     let get_trampoline =
       foreign "luv_get_fs_poll_trampoline"
@@ -1333,7 +904,7 @@ struct
            string_opt @->
            string_opt @->
            ptr addrinfo @->
-            returning error_code)
+           returning error_code)
 
       let free =
         foreign "uv_freeaddrinfo"
@@ -1359,7 +930,7 @@ struct
            trampoline @->
            ptr Types.Sockaddr.t @->
            int @->
-            returning error_code)
+           returning error_code)
     end
   end
 
@@ -1449,7 +1020,7 @@ struct
     let queue =
       foreign "uv_queue_work"
         (ptr Loop.t @-> ptr t @-> work_trampoline @-> after_work_trampoline @->
-          returning error_code)
+         returning error_code)
   end
 
   module Thread =
@@ -1468,12 +1039,12 @@ struct
     let create =
       foreign "uv_thread_create_ex"
         (ptr t @-> ptr options @-> trampoline @-> ptr void @->
-          returning error_code)
+         returning error_code)
 
     let create_c =
       foreign "luv_thread_create_c"
         (ptr t @-> ptr options @-> nativeint @-> nativeint @->
-          returning error_code)
+         returning error_code)
 
     let self =
       foreign "uv_thread_self"
@@ -1664,27 +1235,27 @@ struct
     let ip4_addr =
       foreign "uv_ip4_addr"
         (ocaml_string @-> int @-> ptr Types.Sockaddr.in_ @->
-          returning error_code)
+         returning error_code)
 
     let ip6_addr =
       foreign "uv_ip6_addr"
         (ocaml_string @-> int @-> ptr Types.Sockaddr.in6 @->
-          returning error_code)
+         returning error_code)
 
     let ip4_name =
       foreign "uv_ip4_name"
         (ptr Types.Sockaddr.in_ @-> ocaml_bytes @-> size_t @->
-          returning error_code)
+         returning error_code)
 
     let ip6_name =
       foreign "uv_ip6_name"
         (ptr Types.Sockaddr.in6 @-> ocaml_bytes @-> size_t @->
-          returning error_code)
+         returning error_code)
 
     let memcpy_from_sockaddr =
       foreign "memcpy"
         (ptr Types.Sockaddr.storage @-> ptr Types.Sockaddr.t @-> int @->
-          returning void)
+         returning void)
 
     let ntohs =
       foreign "ntohs"
@@ -1771,7 +1342,7 @@ struct
     let interface_addresses =
       foreign "uv_interface_addresses"
         (ptr (ptr Types.Network.Interface_address.t) @-> ptr int @->
-          returning error_code)
+         returning error_code)
 
     let free_interface_addresses =
       foreign "uv_free_interface_addresses"
@@ -1890,7 +1461,7 @@ struct
     let trampoline =
       static_funptr
         Ctypes.(ptr request @-> error_code @-> ptr void @-> size_t @->
-          returning void)
+                returning void)
 
     let get_trampoline =
       foreign "luv_get_random_trampoline"
@@ -1908,7 +1479,7 @@ struct
          size_t @->
          uint @->
          trampoline @->
-          returning error_code)
+         returning error_code)
   end
 
   module Metrics =
