@@ -79,22 +79,23 @@ let () = Jbuild_plugin.V1.send @@ {|
  (targets libuv.a dlluv%{ext_dll})
  (deps (source_tree vendor))
  (action (progn
+  (bash "echo $PATH")
   (bash "cp -r vendor/configure/* vendor/libuv/")
   (chdir vendor/libuv (progn
    (bash
     "sh configure --host `ocamlc -config | awk '/^host:/ {print $NF}'` \
-      'CC=%{cc}' CFLAGS=-DNDEBUG --silent --enable-silent-rules")
-   (ignore-outputs (bash
-    "$([ '%{os_type}' = Unix ] && echo %{make} || echo make) V=0 -j 4 \
+      'CC=%{cc}' CFLAGS=-DNDEBUG")
+   (bash
+    "$([ '%{os_type}' = Unix ] && echo %{make} || echo make) V=1 -j 4 \
       -o aclocal.m4 -o Makefile.in -o configure \
-      -o configure.status -o Makefile libuv.la"))
-   (ignore-outputs (bash
-    "sh libtool --silent --no-warnings --mode install cp libuv.la `pwd`"))))
+      -o configure.status -o Makefile libuv.la")
+   (bash
+    "sh libtool --mode install cp libuv.la `pwd`")))
   (bash "cp vendor/libuv/libuv.a .")
-  (ignore-outputs (bash
+  (bash
    "cp vendor/libuv/libuv.so.1.0.0 dlluv.so || \
     cp vendor/libuv/libuv.1.dylib dlluv.so || \
-    cp vendor/bin/libuv-1.dll dlluv.dll")))))
+    cp vendor/bin/libuv-1.dll dlluv.dll"))))
 
 (rule
  (targets extra_libs.sexp)
