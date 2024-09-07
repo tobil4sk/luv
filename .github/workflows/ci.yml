@@ -30,6 +30,13 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml }}
           windows-environment: ${{ matrix.system }}
 
+      - run: |
+          echo $env:PATH
+          where.exe sh
+
+          $env:PATH="C:\msys64\usr\bin;$env:PATH"
+          where.exe sh
+
       # - run: tree D:\cygwin
       #   if: matrix.os == 'windows-latest'
 
