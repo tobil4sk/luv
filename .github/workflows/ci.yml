@@ -24,7 +24,7 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: ocaml/setup-ocaml@v3
+      - uses: tobil4sk/setup-ocaml@fix/cygwin-path
         with:
           ocaml-compiler: ${{ matrix.ocaml }}
 
