@@ -16,6 +16,7 @@ jobs:
             ocaml: 4
           - os: windows-latest
             ocaml: 4
+            system: msys2
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -24,12 +25,13 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: ocaml/setup-ocaml@v3
+      - uses: tobil4sk/setup-ocaml@feature/msys2
         with:
           ocaml-compiler: ${{ matrix.ocaml }}
+          windows-environment: ${{ matrix.system }}
 
-      - run: tree D:\cygwin
-        if: matrix.os == 'windows-latest'
+      # - run: tree D:\cygwin
+      #   if: matrix.os == 'windows-latest'
 
       - run: opam install -y --deps-only .
       - run: opam exec -- dune build -p luv
