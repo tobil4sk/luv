@@ -43,6 +43,11 @@ jobs:
       - run: opam install -y --deps-only .
       - run: opam exec -- dune build -p luv
 
+
+      - run: |
+          $env:PATH="C:\msys64\usr\bin;$env:PATH"
+          opam exec -- dune build -p luv
+
   old-libuv:
     strategy:
       fail-fast: false
