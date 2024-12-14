@@ -29,7 +29,14 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml }}
 
       - run: opam install -y --deps-only .
-      - run: opam exec -- dune build -p luv
+
+      - run: |
+          opam pin add mingw-w64-shims https://github.com/tobil4sk/mingw-w64-shims.git
+          opam reinstall mingw-w64-shims
+          opam exec -- env
+        if: matrix.os == 'windows-latest'
+
+      - run: opam exec -- dune build -p luv --verbose
 
   old-libuv:
     strategy:
