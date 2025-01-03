@@ -79,6 +79,7 @@ let () = Jbuild_plugin.V1.send @@ {|
  (targets libuv.a dlluv%{ext_dll})
  (deps (source_tree vendor))
  (action (progn
+  (bash "echo $_as_can_reexec")
   (bash "echo $PATH")
   (bash "cp -r vendor/configure/* vendor/libuv/")
   (chdir vendor/libuv (progn
