@@ -15,6 +15,9 @@ jobs:
         include:
           - os: macos-latest
             ocaml: 4
+        exclude:
+          - os: windows-latest
+            ocaml: 4.03.x
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -26,6 +29,10 @@ jobs:
       - uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml }}
+
+      - run: echo "C:\cygwin\bin;$env:PATH" >> "$GITHUB_PATH"
+        name: Patch windows PATH
+        if: matrix.os == 'windows-latest'
 
       - run: opam install -y --deps-only .
       - run: opam exec -- dune build -p luv
