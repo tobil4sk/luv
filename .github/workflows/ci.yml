@@ -7,14 +7,13 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
+          - windows-latest
         ocaml:
           - 5
           - 4
           - 4.03.x
         include:
           - os: macos-latest
-            ocaml: 4
-          - os: windows-latest
             ocaml: 4
       fail-fast: false
     runs-on: ${{ matrix.os }}
