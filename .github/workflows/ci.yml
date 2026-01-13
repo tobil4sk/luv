@@ -32,7 +32,7 @@ jobs:
 
       - run: |
           echo $env:PATH
-          echo "C:\cygwin\bin;C:\cygwin\usr\x86_64-w64-mingw32\bin;$env:PATH" >> "$GITHUB_PATH"
+          echo "C:\cygwin\bin;$env:PATH" >> "$GITHUB_PATH"
         name: Patch windows PATH
         if: matrix.os == 'windows-latest'
 
