@@ -30,7 +30,9 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml }}
 
-      - run: echo "C:\cygwin\bin;C:\cygwin\usr\x86_64-w64-mingw32\bin;$env:PATH" >> "$GITHUB_PATH"
+      - run: |
+          echo $env:PATH
+          echo "C:\cygwin\bin;C:\cygwin\usr\x86_64-w64-mingw32\bin;$env:PATH" >> "$GITHUB_PATH"
         name: Patch windows PATH
         if: matrix.os == 'windows-latest'
 
