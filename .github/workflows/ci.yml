@@ -38,6 +38,8 @@ jobs:
 
       - run: opam install -y --deps-only .
       - run: opam exec -- dune build -p luv
+        env:
+          BASH_ENV:
 
   old-libuv:
     strategy:
